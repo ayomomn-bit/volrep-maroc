@@ -1,0 +1,184 @@
+@import "tailwindcss";
+
+/*
+ * VOLREP official brand tokens.
+ * Palette: Primary Black #0B0B0B · Secondary Off-White #F5F4F0 ·
+ * Neutral Slate Gray #757B82 · Accent Volt Blue #378FFD.
+ *
+ * The Volt Blue hex (#378FFD) is the single source of truth shared with the
+ * product landing page (product-landing.css `--primary`) — homepage and
+ * product page now resolve every "brand blue" to the exact same value.
+ * `--volrep-blue` is the public alias to prefer in new code.
+ *
+ * Volt Blue is the brand accent — used deliberately, not everywhere. Most
+ * of the UI (typography, backgrounds, most buttons) stays black/off-white;
+ * blue is reserved for a small set of intentional "signature" moments (the
+ * announcement bar, the primary Add to Cart CTA, and the usual small
+ * accents/active-states/links/indicators elsewhere) so it keeps reading as
+ * a brand color rather than a generic site-wide hue. --volt-deep is a ~20%-
+ * darkened step off --volt for the hover state on solid-blue surfaces
+ * (Add to Cart) — solid, not a gradient, so the CTA still reads as flat and
+ * premium on press/hover rather than glossy.
+ *
+ * --muted-foreground is a darkened step off the official Slate Gray, not a
+ * separate brand color: raw #757B82 on the #F5F4F0 surface only reaches
+ * ~3.9:1 contrast, short of the 4.5:1 WCAG AA text minimum. The literal
+ * Slate Gray token (--slate) stays available for borders/icons and for text
+ * on ink surfaces, where it comfortably passes.
+ */
+:root {
+  --ink: #0b0b0b;
+  --paper: #f5f4f0;
+  --slate: #757b82;
+  --volt: #378ffd;
+  --volt-deep: #2c72ca;
+  /* Public alias — prefer --volrep-blue in new code. */
+  --volrep-blue: var(--volt);
+  /* Reserved exclusively for review/rating stars (Results section and
+     anywhere else star ratings appear) — the one deliberate place this
+     system uses gold instead of ink/volt. Not a general accent; don't use
+     it for anything else (buttons, backgrounds, links, badges). */
+  --gold: #f2b134;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --muted: #ece9e1;
+  --muted-foreground: #5f656b;
+  --border: #e2ded4;
+  --accent: var(--volt);
+  --accent-foreground: var(--paper);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-slate: var(--slate);
+  --color-volt: var(--volt);
+  --color-volt-deep: var(--volt-deep);
+  --color-volrep-blue: var(--volrep-blue);
+  --color-gold: var(--gold);
+
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-montserrat);
+}
+
+/* Guards against any inner horizontally-scrolling element (carousels,
+   snap-scroll tracks) leaking into page-level horizontal scroll — this
+   site never intentionally scrolls sideways at the document level.
+   Uses `clip` rather than `hidden`: per the CSS Overflow spec, pairing
+   overflow-x: hidden with an unset (visible) overflow-y forces the
+   browser to silently compute overflow-y as `auto` too — which makes
+   <html>/<body> register as scroll containers and become the (non-
+   functional, since neither actually scrolls independently) reference
+   ancestor for every `position: sticky` element on the site, breaking
+   sticky everywhere. `clip` guards the same horizontal axis without
+   triggering that auto-pairing. */
+html {
+  overflow-x: clip;
+}
+
+body {
+  overflow-x: clip;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+}
+
+/*
+ * Hero product-media entrance (Section 01 Hero only). One-time, subtle,
+ * and skipped entirely for users who prefer reduced motion.
+ */
+@keyframes hero-media-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-media-enter {
+    animation: hero-media-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+/*
+ * Product hero benefits list (BenefitsList) — each row fades/lifts in on
+ * mount, staggered via an inline animation-delay per item. Same one-time,
+ * subtle treatment as hero-media-in above, and skipped the same way for
+ * reduced-motion users.
+ */
+@keyframes benefit-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .benefit-fade-in {
+    animation: benefit-fade-in 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+/*
+ * Recovery Philosophy section (Section 03) — near-imperceptible background
+ * zoom for a cinematic feel. Neutralized for reduced-motion users by the
+ * site-wide safeguard below (animation-iteration-count: 1, duration ~0).
+ */
+@keyframes recovery-bg-zoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.04);
+  }
+}
+
+.recovery-bg-zoom {
+  animation: recovery-bg-zoom 22s ease-in-out infinite alternate;
+}
+
+/* Mobile testimonial slider (Section 05) — hides the scrollbar for the
+   native horizontal snap-scroll track without disabling scrolling. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* Keeps swipe momentum inside the track instead of chaining into the
+     page scroll (the actual source of the horizontal-overflow bug). */
+  overscroll-behavior-x: contain;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Site-wide reduced-motion safeguard: shorten transitions/animations to
+   effectively instant for users who've opted out of motion at the OS level. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

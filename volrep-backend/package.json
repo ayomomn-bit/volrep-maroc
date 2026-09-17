@@ -1,0 +1,46 @@
+{
+  "name": "volrep-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.6.0"
+  },
+  "scripts": {
+    "dev": "node --env-file=.env --import tsx --watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file=.env dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --env-file=.env.test node_modules/vitest/vitest.mjs run",
+    "test:watch": "node --env-file=.env.test node_modules/vitest/vitest.mjs",
+    "db:generate": "node --env-file=.env --import tsx node_modules/drizzle-kit/bin.cjs generate",
+    "db:migrate": "node --env-file=.env --import tsx src/db/migrate.ts",
+    "db:migrate:test": "node --env-file=.env.test --import tsx src/db/migrate.ts",
+    "db:seed": "node --env-file=.env --import tsx src/db/seed.ts",
+    "db:seed:test": "node --env-file=.env.test --import tsx src/db/seed.ts",
+    "admin:create": "node --env-file=.env --import tsx src/db/create-admin.ts",
+    "media:migrate-shopify": "node --env-file=.env --import tsx src/db/migrate-shopify-media.ts",
+    "media:migrate-homepage": "node --env-file=.env --import tsx src/db/migrate-homepage-media.ts",
+    "db:studio": "node --env-file=.env --import tsx node_modules/drizzle-kit/bin.cjs studio"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^10.0.2",
+    "@fastify/multipart": "^10.1.1",
+    "@fastify/rate-limit": "^10.2.2",
+    "@fastify/static": "^10.1.3",
+    "argon2": "^0.41.1",
+    "drizzle-orm": "^0.36.4",
+    "fastify": "^5.2.0",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "drizzle-kit": "^0.30.1",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

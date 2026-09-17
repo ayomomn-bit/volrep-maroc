@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+# Local product-media uploads (MEDIA_STORAGE_DRIVER=local)
+/var/

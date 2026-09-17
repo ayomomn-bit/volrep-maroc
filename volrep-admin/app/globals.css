@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/*
+ * VOLREP Admin — operational dashboard. Deliberately plain: neutral slate,
+ * one accent (Volt Blue, the brand accent), system font stack. No brand
+ * marketing typography here — this is a tool, not the storefront.
+ * Desktop-first, information-dense, fast to scan.
+ */
+@theme {
+  --color-volt: #2f6fed;
+  --color-volt-deep: #1f56c8;
+  --color-volt-soft: #eef3fe;
+  --color-ink: #0b0b0b;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+html {
+  /* Slightly tighter than the 16px default — this is a data tool. */
+  font-size: 15px;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900 antialiased;
+  font-family: var(--font-sans);
+}
+
+/* Tabular figures for tables / money / metrics so columns align. */
+table,
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Consistent focus ring for interactive elements. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-volt);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Unobtrusive scrollbars for scroll containers (sidebar, tables, main). */
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
+}
+.scroll-slim::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: rgb(203 213 225);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 9999px;
+}
+.scroll-slim::-webkit-scrollbar-thumb:hover {
+  background: rgb(148 163 184);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* Skeleton shimmer. */
+@keyframes admin-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.animate-admin-pulse {
+  animation: admin-pulse 1.4s ease-in-out infinite;
+}
+
+/* Toast enter. */
+@keyframes admin-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-toast-in {
+  animation: admin-toast-in 0.14s ease-out;
+}
