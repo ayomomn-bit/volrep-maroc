@@ -30,7 +30,7 @@ function Logo({ logo, className }: { logo: ShopLogo; className: string }) {
         width={160}
         height={40}
         className={`h-6 w-auto lg:h-7 ${className}`}
-        priority
+        loading="eager"
       />
     );
   }

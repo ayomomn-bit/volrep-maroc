@@ -58,12 +58,17 @@ export function LpGallery({ images, title }: { images: ShopifyImage[]; title: st
           aria-label="Agrandir l’image"
           onClick={() => setLightbox(true)}
         >
+          {/* This is the product page's LCP element. `priority` is deprecated
+              in Next.js 16 (see node_modules/next/dist/docs/.../image.md) and
+              no longer forces fetchPriority=high on the element — only
+              loading=eager + fetchPriority=high does. */}
           <Image
             src={current.url}
             alt={current.altText ?? title}
             fill
             sizes="(min-width: 1024px) 46vw, 100vw"
-            priority
+            loading="eager"
+            fetchPriority="high"
             className="object-cover"
           />
         </button>

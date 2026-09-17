@@ -40,14 +40,20 @@ export function HeroProductVisual({
             loop
             autoPlay
             playsInline
+            preload="auto"
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
+          // This is the homepage's LCP element: it must be discoverable and
+          // fetched at high priority, never lazy (loading="lazy" was the
+          // default here and is what previously delayed LCP by seconds).
           <Image
             src={media.url}
             alt={media.alt}
             fill
             sizes="(min-width: 1024px) 50vw, 100vw"
+            loading="eager"
+            fetchPriority="high"
             className="object-cover"
           />
         ))}
