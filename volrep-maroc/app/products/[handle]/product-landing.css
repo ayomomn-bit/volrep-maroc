@@ -1518,7 +1518,12 @@
 
   /* ---- ≥1024px : laptop / desktop — multi-column layouts ---- */
   @media (min-width: 1024px) {
-    .container { max-width: 968px; padding: 0 40px; }
+    /* Matches PageContainer (components/layout/PageContainer.tsx): 1440px
+       cap + 64px gutter, the same content grid Header/Footer render
+       through, so the product-page body's left/right edges line up with
+       the rest of the site instead of sitting on a narrower cap of its
+       own. */
+    .container { max-width: 1440px; padding: 0 64px; }
 
     .section-title-center { font-size: 34px; margin-bottom: 12px; }
     .section-subtitle { font-size: 15px; margin-bottom: 32px; }
@@ -1663,15 +1668,9 @@
 
   /* ---- ≥1280px : desktop ---- */
   @media (min-width: 1280px) {
-    .container { max-width: 1160px; }
     .lp-hero-grid { gap: 64px; }
     .order-section .container { max-width: 1080px; }
     .comparison-new { max-width: 900px; }
-  }
-
-  /* ---- ≥1536px : large desktop — cap so lines stay readable ---- */
-  @media (min-width: 1536px) {
-    .container { max-width: 1240px; }
   }
 
   /* ---- narrow-phone tweaks for the pack cards ---- */
