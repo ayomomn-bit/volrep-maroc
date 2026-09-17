@@ -97,9 +97,21 @@ export function LpBuyBox({
 
   return (
     <div className="lp-buy">
-      <div className="lp-buy-qty-row">
-        <span className="lp-buy-qty-label">{t.product.quantity.group}</span>
+      {/* Secondary purchase row: fixed-width qty stepper + "Ajouter au
+          panier" flexing to fill the rest. QuantitySelector already carries
+          its own role="group" aria-label (t.product.quantity.group), so no
+          separate visible label is needed here. */}
+      <div className="lp-buy-secondary-row">
         <QuantitySelector quantity={quantity} onChange={setQuantity} disabled={isPending || isNavigating} />
+        <button
+          type="button"
+          className="lp-buy-btn lp-buy-btn--secondary"
+          onClick={handleAddToCart}
+          disabled={!available || isPending}
+          aria-live="polite"
+        >
+          {addToCartLabel}
+        </button>
       </div>
 
       {/* "Commander maintenant" is NOT availability-gated — it stays the
@@ -114,16 +126,6 @@ export function LpBuyBox({
         disabled={!variantId || isNavigating}
       >
         {orderNowLabel}
-      </button>
-
-      <button
-        type="button"
-        className="lp-buy-btn lp-buy-btn--secondary"
-        onClick={handleAddToCart}
-        disabled={!available || isPending}
-        aria-live="polite"
-      >
-        {addToCartLabel}
       </button>
 
       {error && (

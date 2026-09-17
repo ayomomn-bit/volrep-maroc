@@ -1720,17 +1720,10 @@
   gap: 10px;
   margin-bottom: 10px;
 }
-.plp .lp-buy-qty-row {
+.plp .lp-buy-secondary-row {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 2px;
-}
-.plp .lp-buy-qty-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--dark);
+  align-items: stretch;
+  gap: 10px;
 }
 .plp .lp-buy-btn {
   display: block;
@@ -1745,6 +1738,13 @@
   letter-spacing: 0.3px;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s, color 0.2s;
+}
+/* Inside the secondary row the button flexes to fill the space left by the
+   fixed/shrink-to-content qty stepper, instead of the default full width. */
+.plp .lp-buy-secondary-row .lp-buy-btn {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .plp .lp-buy-btn:active { transform: scale(0.98); }
 .plp .lp-buy-btn:disabled { opacity: 0.55; cursor: not-allowed; }
