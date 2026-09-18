@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { t } from "@/lib/i18n";
+import { captureVideoPoster } from "@/lib/video-poster";
 import type { PageMediaSlot, ProductImage } from "@/lib/types";
 import { ACCEPT_IMAGE, Button, DropZone, Field, InlineError, Modal, TextInput } from "@/components/ui";
 
@@ -194,6 +195,24 @@ export function MediaField({
 
 type PickerTab = "product" | "url" | "upload" | "none";
 
+// First-frame JPEG of a just-uploaded MP4, sent through the same section
+// media endpoint as any image (stored content-addressed, never in the
+// product gallery). Returns "" on any failure — the manual poster field
+// remains the fallback.
+async function uploadGeneratedPoster(video: File, productId: string): Promise<string> {
+  try {
+    const blob = await captureVideoPoster(video);
+    const base = video.name.replace(/\.[^./\\]+$/, "") || "video";
+    const form = new FormData();
+    form.append("file", new File([blob], `${base}-poster.jpg`, { type: "image/jpeg" }));
+    const res = await api.upload<{ url: string }>(`/api/admin/products/${productId}/page/media`, form);
+    return res.url;
+  } catch (e) {
+    console.warn("Video poster generation skipped:", e);
+    return "";
+  }
+}
+
 function MediaPickerModal({
   slot,
   productId,
@@ -241,11 +260,18 @@ function MediaPickerModal({
         form,
       );
       toast.success(t.studio.page.media.uploadSuccess);
+      // UGC MP4 only (`allowVideo`): give the card a real thumbnail. Runs
+      // after the video is safely stored and can never fail the upload; a
+      // poster the admin already set is left untouched.
+      const poster =
+        allowVideo && res.mediaType === "video" && !slot.poster.trim()
+          ? await uploadGeneratedPoster(file, productId)
+          : slot.poster;
       onPick({
         kind: "url",
         imageId: null,
         url: res.url,
-        poster: slot.poster,
+        poster,
         alt: slot.alt,
         placeholderLabel: slot.placeholderLabel,
         mediaType: res.mediaType ?? "image",
