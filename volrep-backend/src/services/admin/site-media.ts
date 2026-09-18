@@ -52,7 +52,7 @@ function inspect(bytes: Buffer, kind: SiteMediaKind): {
       throw new AppError(413, "MEDIA_TOO_LARGE", "Le fichier dépasse la taille maximale autorisée.");
     }
     const detected = detectVideo(bytes);
-    if (!detected) throw AppError.badRequest("Format vidéo non pris en charge (MP4 uniquement).");
+    if (!detected) throw AppError.badRequest("Format vidéo non pris en charge (MP4 ou WebM uniquement).");
     return { ext: detected.ext, contentType: detected.contentType, width: null, height: null };
   }
 

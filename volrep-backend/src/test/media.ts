@@ -54,6 +54,25 @@ export const MP4_TINY = Buffer.concat([
   Buffer.from("mdat", "ascii"),
 ]);
 
+// A minimal WebM: the EBML magic number followed by a DocType element
+// (id 0x4282, size 4) whose value is "webm" — mirrors the real header shape
+// browsers and detectVideo() key off, without a playable track.
+export const WEBM_TINY = Buffer.concat([
+  Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), // EBML magic
+  Buffer.from([0x42, 0x82, 0x84]), // DocType element id + size(4)
+  Buffer.from("webm", "ascii"),
+  Buffer.alloc(8),
+]);
+
+// Same EBML magic, but a generic Matroska DocType — a real .mkv is not a
+// WebM and detectVideo() must reject it.
+export const MKV_TINY = Buffer.concat([
+  Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), // EBML magic
+  Buffer.from([0x42, 0x82, 0x88]), // DocType element id + size(8)
+  Buffer.from("matroska", "ascii"),
+  Buffer.alloc(8),
+]);
+
 // Build a single-file multipart/form-data body for app.inject().
 export function multipartFile(opts: {
   fieldName?: string;

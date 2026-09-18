@@ -75,12 +75,15 @@ export function declaredPairLooksValid(mimetype: string, filename: string): bool
   return allowed.includes(ext);
 }
 
-// ---- video (MP4 only) --------------------------------------------------
-// Only the "Page produit" section-media upload accepts a video; the product
-// gallery stays images-only. We support standard, browser-playable MP4
-// (ISO base-media file format) and nothing else — no transcoding, no
-// server-side thumbnail generation.
-export type DetectedVideo = { contentType: "video/mp4"; ext: "mp4" };
+// ---- video (MP4 + WebM) -------------------------------------------------
+// Only the "Page produit" section-media upload and the Homepage Hero visual
+// accept a video; the product gallery stays images-only. We support
+// standard, browser-playable MP4 (ISO base-media file format) and WebM
+// (EBML/Matroska) and nothing else — no transcoding, no server-side
+// thumbnail generation.
+export type DetectedVideo =
+  | { contentType: "video/mp4"; ext: "mp4" }
+  | { contentType: "video/webm"; ext: "webm" };
 
 // MP4 major brands we accept as a browser-playable .mp4. An ISO-BMFF file
 // begins with a `ftyp` box: 4-byte size, "ftyp", then a 4-byte major brand.
@@ -95,7 +98,7 @@ const MP4_NEXT_BOXES = new Set([
   "meta", "pdin", "sidx", "ssix", "styp", "emsg", "uuid", "ftyp",
 ]);
 
-export function detectVideo(buf: Buffer): DetectedVideo | null {
+function detectMp4(buf: Buffer): DetectedVideo | null {
   if (buf.length < 16) return null;
   if (buf.toString("ascii", 4, 8) !== "ftyp") return null;
   // AVIF / HEIF are also ISO-BMFF `ftyp` files — never mistake one for a video.
@@ -117,8 +120,42 @@ export function detectVideo(buf: Buffer): DetectedVideo | null {
   return { contentType: "video/mp4", ext: "mp4" };
 }
 
+// WebM is an EBML/Matroska container: every file of this family begins with
+// the EBML magic number 1A 45 DF A3. That magic alone isn't specific enough
+// (a plain Matroska .mkv shares it), so we also require the EBML header's
+// DocType element (ID 0x4282) to be immediately followed by a one-byte
+// EBML-coded length and the ASCII value "webm" — the exact shape real
+// encoders write, and the same shape that lets us reject a plain Matroska
+// .mkv (DocType "matroska"). A loose "does 'webm' appear somewhere nearby"
+// substring search would be spoofable by any file that merely contains that
+// word in its opening bytes.
+const EBML_MAGIC = Buffer.from([0x1a, 0x45, 0xdf, 0xa3]);
+const WEBM_DOCTYPE_ID = Buffer.from([0x42, 0x82]);
+const WEBM_DOCTYPE_VALUE = Buffer.from("webm", "ascii");
+const WEBM_HEADER_SEARCH_WINDOW = 256;
+
+function detectWebm(buf: Buffer): DetectedVideo | null {
+  if (buf.length < 4) return null;
+  if (!buf.subarray(0, 4).equals(EBML_MAGIC)) return null;
+
+  const window = buf.subarray(0, Math.min(buf.length, WEBM_HEADER_SEARCH_WINDOW));
+  const idIndex = window.indexOf(WEBM_DOCTYPE_ID);
+  if (idIndex === -1) return null;
+  const valueStart = idIndex + WEBM_DOCTYPE_ID.length + 1; // + 1-byte EBML length
+  if (!window.subarray(valueStart, valueStart + WEBM_DOCTYPE_VALUE.length).equals(WEBM_DOCTYPE_VALUE)) {
+    return null;
+  }
+
+  return { contentType: "video/webm", ext: "webm" };
+}
+
+export function detectVideo(buf: Buffer): DetectedVideo | null {
+  return detectMp4(buf) ?? detectWebm(buf);
+}
+
 const ALLOWED_VIDEO_EXT_BY_MIME: Record<string, string[]> = {
   "video/mp4": ["mp4", "m4v"],
+  "video/webm": ["webm"],
 };
 
 export function declaredVideoPairLooksValid(mimetype: string, filename: string): boolean {

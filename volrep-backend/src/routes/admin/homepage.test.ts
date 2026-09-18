@@ -10,7 +10,7 @@ import { adminAuditLog, homepage, siteMedia } from "../../db/schema/index.js";
 import { HOMEPAGE_ID } from "../../db/schema/homepage.js";
 import { DEFAULT_HOMEPAGE_DOCUMENT } from "../../lib/homepage/defaults.js";
 import { __setMediaStorage } from "../../lib/media-storage/index.js";
-import { InMemoryMediaStorage, PNG_1PX, GIF_1PX, MP4_TINY, NOT_AN_IMAGE, multipartFile } from "../../test/media.js";
+import { InMemoryMediaStorage, PNG_1PX, GIF_1PX, MP4_TINY, WEBM_TINY, NOT_AN_IMAGE, multipartFile } from "../../test/media.js";
 
 function cloneDefault() {
   return structuredClone(DEFAULT_HOMEPAGE_DOCUMENT) as typeof DEFAULT_HOMEPAGE_DOCUMENT;
@@ -202,6 +202,18 @@ describe("Admin Homepage Studio API", () => {
     const mp4 = await uploadMedia(staff, MP4_TINY, "clip.mp4", "video/mp4");
     expect(mp4.statusCode).toBe(201);
     expect(mp4.json().media.mediaType).toBe("video");
+  });
+
+  it("accepts a WebM upload", async () => {
+    const webm = await uploadMedia(staff, WEBM_TINY, "clip.webm", "video/webm");
+    expect(webm.statusCode).toBe(201);
+    expect(webm.json().media.mediaType).toBe("video");
+    expect(webm.json().media.url).toMatch(/^http:\/\/media\.test\/site\/[0-9a-f]{64}\.webm$/);
+  });
+
+  it("rejects a WebM upload declared with the wrong extension/MIME pair", async () => {
+    const res = await uploadMedia(staff, WEBM_TINY, "clip.webm", "video/mp4");
+    expect(res.statusCode).toBe(400);
   });
 
   it("rejects a non-media upload", async () => {

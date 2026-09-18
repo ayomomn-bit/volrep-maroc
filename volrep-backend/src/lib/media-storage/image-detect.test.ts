@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { detectImage, detectGif, detectVideo } from "./image-detect.js";
-import { PNG_1PX, JPEG_1PX, GIF_1PX, MP4_TINY, NOT_AN_IMAGE } from "../../test/media.js";
+import { PNG_1PX, JPEG_1PX, GIF_1PX, MP4_TINY, WEBM_TINY, MKV_TINY, NOT_AN_IMAGE } from "../../test/media.js";
 
 // Security hardening — Step 3 §2 / §7 / §10.
 // The bytes decide the type. Filename and Content-Type are never consulted
@@ -96,5 +96,24 @@ describe("detectVideo — MP4 signature + structure", () => {
   it("rejects an unknown major brand", () => {
     const weird = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from("ftypXXXX"), Buffer.from("moovmdat")]);
     expect(detectVideo(weird)).toBeNull();
+  });
+});
+
+describe("detectVideo — WebM (EBML) signature + DocType", () => {
+  it("accepts a well-formed EBML header with DocType 'webm'", () => {
+    expect(detectVideo(WEBM_TINY)).toEqual({ contentType: "video/webm", ext: "webm" });
+  });
+
+  it("rejects a generic Matroska file (same EBML magic, DocType 'matroska')", () => {
+    expect(detectVideo(MKV_TINY)).toBeNull();
+  });
+
+  it("rejects random bytes that merely start with the EBML magic number", () => {
+    const fake = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.from("not actually webm at all")]);
+    expect(detectVideo(fake)).toBeNull();
+  });
+
+  it("still accepts MP4 unchanged now that WebM detection is added", () => {
+    expect(detectVideo(MP4_TINY)).toEqual({ contentType: "video/mp4", ext: "mp4" });
   });
 });

@@ -20,10 +20,10 @@ import { Button, DropZone, Field, InlineError, Modal, TextInput } from "@/compon
 
 const ACCEPT_IMAGE = "image/jpeg,image/png,image/webp,image/avif";
 const ACCEPT_GIF = "image/gif";
-const ACCEPT_MP4 = "video/mp4";
+const ACCEPT_VIDEO = "video/mp4,video/webm";
 
 function acceptFor(allowGif?: boolean, allowVideo?: boolean): string {
-  return [ACCEPT_IMAGE, allowGif !== false && ACCEPT_GIF, allowVideo && ACCEPT_MP4]
+  return [ACCEPT_IMAGE, allowGif !== false && ACCEPT_GIF, allowVideo && ACCEPT_VIDEO]
     .filter(Boolean)
     .join(",");
 }
@@ -298,7 +298,7 @@ function HomepagePickerModal({
               disabled={!url.trim()}
               onClick={() => {
                 const clean = url.trim();
-                const isMp4 = /\.mp4(\?|#|$)/i.test(clean);
+                const isVideoUrl = /\.(mp4|webm)(\?|#|$)/i.test(clean);
                 const isGif = /\.gif(\?|#|$)/i.test(clean);
                 onPick({
                   kind: "url",
@@ -307,7 +307,7 @@ function HomepagePickerModal({
                   poster: slot.poster,
                   alt: alt.trim(),
                   placeholderLabel: slot.placeholderLabel,
-                  mediaType: allowVideo && isMp4 ? "video" : allowGif !== false && isGif ? "gif" : "image",
+                  mediaType: allowVideo && isVideoUrl ? "video" : allowGif !== false && isGif ? "gif" : "image",
                   fileName: fileNameFromUrl(clean),
                 });
               }}
