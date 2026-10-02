@@ -57,6 +57,13 @@
       "when": 1789069135844,
       "tag": "0007_giant_doctor_doom",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790876338642,
+      "tag": "0008_loud_beyonder",
+      "breakpoints": true
     }
   ]
 }

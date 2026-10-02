@@ -461,6 +461,52 @@ export const t = {
         compareAtNotAbovePrice: "Le prix barré doit être strictement supérieur au prix de vente.",
       },
     },
+    // "variante implicite" — simple product (no manageable variants): the
+    // commerce fields live directly on the product, and the backend keeps
+    // one internal Default Variant in sync so cart/checkout are untouched.
+    mode: {
+      label: "Type de produit",
+      simple: "Produit simple",
+      simpleHint: "Un seul prix, un seul stock — pas de déclinaisons.",
+      variants: "Produit avec variantes",
+      variantsHint: "Prix et stock par déclinaison (couleur, taille…).",
+      switchToVariants: "Activer les variantes",
+      switchToVariantsConfirmTitle: "Activer les variantes ?",
+      switchToVariantsConfirmBody:
+        "Le prix et le stock actuels du produit deviendront sa première variante, que vous pourrez ensuite modifier ou compléter avec d’autres déclinaisons.",
+      switchToSimple: "Repasser en produit simple",
+      switchToSimpleConfirmTitle: "Repasser en produit simple ?",
+      switchToSimpleConfirmBody:
+        "Sa variante unique deviendra le prix et le stock du produit. Aucune donnée n’est perdue.",
+      switchToSimpleConfirmBodyEmpty:
+        "Ce produit n’a pas encore de variante : il basculera directement en produit simple, avec un prix à définir et un stock à 0.",
+      switchToSimpleBlockedMultiple:
+        "Ce produit a plusieurs variantes. Supprimez-en jusqu’à n’en garder qu’une seule avant de repasser en produit simple.",
+      switchError: "Le changement de mode a échoué",
+    },
+    simple: {
+      title: "Prix et stock",
+      subtitle: "Ce produit n’a pas de déclinaisons — le prix et le stock sont gérés directement ici.",
+      price: "Prix de vente",
+      compareAt: "Prix barré (facultatif)",
+      availableForSale: "Disponible à la vente",
+      save: "Enregistrer",
+      priceRequired: "Le prix est obligatoire.",
+      priceInvalid: "Le prix doit être un nombre avec au plus 2 décimales.",
+      compareAtInvalid: "Le prix barré est invalide.",
+      compareAtNotAbovePrice: "Le prix barré doit être strictement supérieur au prix de vente.",
+      stockLabel: "Stock",
+      adjustStock: "Ajuster le stock",
+      adjustStockTitle: "Ajuster le stock",
+      newQuantity: "Nouvelle quantité",
+      reason: "Motif",
+      reasonPlaceholder: "Ex. : réception fournisseur, inventaire…",
+      reasonRequired: "Le motif est obligatoire.",
+      quantityInvalid: "La quantité doit être un entier positif ou nul.",
+      adjustConfirm: "Mettre à jour le stock",
+      adjustSuccess: "Stock mis à jour",
+      adjustError: "La mise à jour du stock a échoué",
+    },
   },
 
   // ---- Product Studio (Phase 7C-3) -----------------------------------
@@ -659,6 +705,8 @@ export const t = {
       groupDescriptionHint: "Texte de référence du produit. Le contenu marketing détaillé se gère dans Lirya.",
       groupVariants: "Variantes",
       groupVariantsHint: "Options, prix, disponibilité et stock des déclinaisons du produit.",
+      groupCommerce: "Prix et stock",
+      groupCommerceHint: "Type de produit (simple ou avec variantes), prix et stock.",
       groupPricing: "Prix",
       groupPricingHint: "Prix de vente et prix barré, par variante.",
     },

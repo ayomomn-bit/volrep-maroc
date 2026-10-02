@@ -5,6 +5,8 @@ import type { ProductStudio as ProductStudioData, Role } from "@/lib/types";
 import { t } from "@/lib/i18n";
 import { ConfirmDialog, FieldGroup, Tabs } from "@/components/ui";
 import { VariantsManager } from "@/components/products/VariantsManager";
+import { ModeSwitch } from "@/components/products/ModeSwitch";
+import { SimpleProductCommerce } from "@/components/products/SimpleProductCommerce";
 import { DirtyProvider, useDirtyApi } from "./DirtyContext";
 import { InfoSection } from "./InfoSection";
 import { DescriptionSection } from "./DescriptionSection";
@@ -71,9 +73,16 @@ function StudioTabs({
           <FieldGroup title={t.studio.info.groupDescription} description={t.studio.info.groupDescriptionHint}>
             <DescriptionSection product={product} onSaved={onSaved} />
           </FieldGroup>
-          <FieldGroup title={t.studio.info.groupVariants} description={t.studio.info.groupVariantsHint}>
-            <VariantsManager product={product} onChanged={onSaved} />
+          <FieldGroup title={t.studio.info.groupCommerce} description={t.studio.info.groupCommerceHint}>
+            <ModeSwitch product={product} onChanged={onSaved} />
           </FieldGroup>
+          {product.hasVariants ? (
+            <FieldGroup title={t.studio.info.groupVariants} description={t.studio.info.groupVariantsHint}>
+              <VariantsManager product={product} onChanged={onSaved} />
+            </FieldGroup>
+          ) : (
+            <SimpleProductCommerce product={product} onChanged={onSaved} />
+          )}
         </div>
       )}
 

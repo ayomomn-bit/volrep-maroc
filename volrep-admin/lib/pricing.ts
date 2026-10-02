@@ -15,3 +15,23 @@ export function discountPercent(price: string | number, compareAt: string | numb
   if (!Number.isFinite(p) || !Number.isFinite(c) || p <= 0 || c <= p) return null;
   return Math.round((1 - p / c) * 100);
 }
+
+export type SimpleCommerceError = "priceRequired" | "priceInvalid" | "compareAtInvalid" | "compareAtNotAbovePrice";
+
+/**
+ * Client-side mirror of the backend's simple-product commerce validation
+ * (assertMoneyString / assertCompareAtAbovePrice in
+ * volrep-backend/src/services/admin/variants.ts, reused by
+ * services/admin/products.ts for a simple product's price/compare-at) —
+ * catches the obvious mistakes before the round trip, same spirit as
+ * VariantFormModal's inline checks. The backend remains authoritative.
+ */
+export function validateSimpleCommerce(price: string, compareAt: string): SimpleCommerceError | null {
+  const p = price.trim();
+  const c = compareAt.trim();
+  if (!p) return "priceRequired";
+  if (!MONEY_RE.test(p)) return "priceInvalid";
+  if (c && !MONEY_RE.test(c)) return "compareAtInvalid";
+  if (c && Number(c) <= Number(p)) return "compareAtNotAbovePrice";
+  return null;
+}

@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { AppError } from "../../lib/errors.js";
-import { productVariants } from "../../db/schema/index.js";
+import { productVariants, products } from "../../db/schema/index.js";
 import { recordAudit } from "../../lib/audit.js";
 import { mapAdminVariant } from "../../mappers/admin.js";
 import type { AdminContext } from "./auth.js";
@@ -65,6 +65,27 @@ export async function adjustInventory(admin: AdminContext, variantId: string, in
 
     return mapAdminVariant(row);
   });
+}
+
+// Stock for a simple product (hasVariants: false). Resolves its Default
+// Variant and delegates to adjustInventory() unchanged above — same lock,
+// same audit trail (entityType stays "product_variant"), so
+// GET /api/admin/variants/:variantId/inventory still shows its full
+// history and nothing about stock movement is duplicated for this mode.
+export async function adjustProductInventory(admin: AdminContext, productId: string, input: InventoryInput) {
+  const [product] = await db.select({ hasVariants: products.hasVariants }).from(products).where(eq(products.id, productId)).limit(1);
+  if (!product) throw AppError.notFound("Product not found");
+  if (product.hasVariants) {
+    throw AppError.conflict(
+      "PRODUCT_HAS_VARIANTS",
+      "This product manages stock per variant. Use the variant inventory endpoint instead.",
+    );
+  }
+
+  const [variant] = await db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.productId, productId)).limit(1);
+  if (!variant) throw new Error(`Simple product ${productId} has no Default Variant — data integrity bug`);
+
+  return adjustInventory(admin, variant.id, input);
 }
 
 // Read the audit-log-backed adjustment history for one variant.

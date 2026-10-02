@@ -1,4 +1,5 @@
 import { and, eq, gt, sql } from "drizzle-orm";
+import type { PgTransaction } from "drizzle-orm/pg-core";
 import { db } from "../../db/client.js";
 import { AppError } from "../../lib/errors.js";
 import { cartLines, carts, productVariants, products } from "../../db/schema/index.js";
@@ -6,9 +7,16 @@ import { recordAudit } from "../../lib/audit.js";
 import { mapAdminVariant } from "../../mappers/admin.js";
 import type { AdminContext } from "./auth.js";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Tx = PgTransaction<any, any, any>;
+
 // A money string like "899.00" — numeric(10,2). Non-negative, at most two
 // decimals. Callers (Zod) also guard, this is defence in depth.
-function assertMoneyString(label: string, value: string): void {
+//
+// Exported: services/admin/products.ts reuses this exact check for a
+// simple product's price/compare-at fields — one money-validation rule,
+// not a second copy of it.
+export function assertMoneyString(label: string, value: string): void {
   if (!/^\d{1,8}(\.\d{1,2})?$/.test(value)) {
     throw AppError.badRequest(`${label} must be a non-negative amount with at most 2 decimals.`);
   }
@@ -17,11 +25,34 @@ function assertMoneyString(label: string, value: string): void {
 // A compare-at price only makes sense as a strike-through "was" price, so
 // it must be strictly greater than the actual selling price. The storefront
 // mapper already hides a non-greater compareAt; rejecting it here keeps
-// meaningless data out of the table entirely.
-function assertCompareAtAbovePrice(priceAmount: string, compareAtAmount: string): void {
+// meaningless data out of the table entirely. Exported for the same reason
+// as assertMoneyString above.
+export function assertCompareAtAbovePrice(priceAmount: string, compareAtAmount: string): void {
   if (Number(compareAtAmount) <= Number(priceAmount)) {
     throw AppError.badRequest("Le prix barré doit être strictement supérieur au prix de vente.");
   }
+}
+
+// Every mutation below locks the parent product row (FOR UPDATE) before
+// touching product_variants, for two reasons:
+//  - it serializes against services/admin/products.ts's switchProductMode
+//    (same lock), so a variant can never be created/edited/deleted in the
+//    narrow window where a product is switching between simple/variants;
+//  - it is the single place that refuses the operation on a simple product
+//    (`hasVariants: false`) with a clear 409 SIMPLE_PRODUCT — a simple
+//    product's one `product_variants` row (its "Default Variant") is
+//    maintained ONLY by products.ts's create/update/switchProductMode, and
+//    must never be reachable through these admin-facing endpoints.
+async function lockVariantManageableProduct(tx: Tx, productId: string) {
+  const [product] = await tx.select({ id: products.id, hasVariants: products.hasVariants }).from(products).where(eq(products.id, productId)).for("update");
+  if (!product) throw AppError.notFound("Product not found");
+  if (!product.hasVariants) {
+    throw AppError.conflict(
+      "SIMPLE_PRODUCT",
+      "This product has no manageable variants (it is a simple product). Edit its price, stock and availability directly on the product instead.",
+    );
+  }
+  return product;
 }
 
 export type CreateVariantInput = {
@@ -37,24 +68,23 @@ export type CreateVariantInput = {
 };
 
 export async function createVariant(admin: AdminContext, productId: string, input: CreateVariantInput) {
-  const [product] = await db.select({ id: products.id }).from(products).where(eq(products.id, productId)).limit(1);
-  if (!product) throw AppError.notFound("Product not found");
-
-  assertMoneyString("Price", input.priceAmount);
-  if (input.compareAtAmount != null) {
-    assertMoneyString("Compare-at price", input.compareAtAmount);
-    assertCompareAtAbovePrice(input.priceAmount, input.compareAtAmount);
-  }
-  if (input.stock !== undefined && (!Number.isInteger(input.stock) || input.stock < 0)) {
-    throw AppError.badRequest("Stock must be a non-negative integer.");
-  }
-
-  if (input.sku) {
-    const [dupe] = await db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, input.sku)).limit(1);
-    if (dupe) throw new AppError(409, "SKU_TAKEN", `SKU "${input.sku}" is already in use.`);
-  }
-
   return db.transaction(async (tx) => {
+    await lockVariantManageableProduct(tx, productId);
+
+    assertMoneyString("Price", input.priceAmount);
+    if (input.compareAtAmount != null) {
+      assertMoneyString("Compare-at price", input.compareAtAmount);
+      assertCompareAtAbovePrice(input.priceAmount, input.compareAtAmount);
+    }
+    if (input.stock !== undefined && (!Number.isInteger(input.stock) || input.stock < 0)) {
+      throw AppError.badRequest("Stock must be a non-negative integer.");
+    }
+
+    if (input.sku) {
+      const [dupe] = await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, input.sku)).limit(1);
+      if (dupe) throw new AppError(409, "SKU_TAKEN", `SKU "${input.sku}" is already in use.`);
+    }
+
     const [row] = await tx
       .insert(productVariants)
       .values({
@@ -107,63 +137,65 @@ export type UpdateVariantInput = {
 // stock movement is reason-tagged and audited with before/after. A plain
 // "set stock to N" on the variant-edit endpoint would bypass that.
 export async function updateVariant(admin: AdminContext, variantId: string, input: UpdateVariantInput) {
-  const [current] = await db.select().from(productVariants).where(eq(productVariants.id, variantId)).limit(1);
-  if (!current) throw AppError.notFound("Variant not found");
-
-  if (input.priceAmount !== undefined) assertMoneyString("Price", input.priceAmount);
-  if (input.compareAtAmount != null) {
-    assertMoneyString("Compare-at price", input.compareAtAmount);
-    assertCompareAtAbovePrice(input.priceAmount ?? current.priceAmount, input.compareAtAmount);
-  }
-
-  if (input.sku && input.sku !== current.sku) {
-    const [dupe] = await db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, input.sku)).limit(1);
-    if (dupe) throw new AppError(409, "SKU_TAKEN", `SKU "${input.sku}" is already in use.`);
-  }
-
-  const patch: Partial<typeof productVariants.$inferInsert> = { updatedAt: new Date() };
-  const changed: Record<string, { from: unknown; to: unknown }> = {};
-  const diff = (before: unknown, after: unknown): boolean =>
-    after !== undefined && JSON.stringify(before) !== JSON.stringify(after);
-
-  if (diff(current.title, input.title)) {
-    patch.title = input.title!;
-    changed.title = { from: current.title, to: input.title };
-  }
-  if (diff(current.sku, input.sku)) {
-    patch.sku = input.sku ?? null;
-    changed.sku = { from: current.sku, to: input.sku };
-  }
-  if (diff(current.priceAmount, input.priceAmount)) {
-    patch.priceAmount = input.priceAmount!;
-    changed.priceAmount = { from: current.priceAmount, to: input.priceAmount };
-  }
-  if (diff(current.priceCurrency, input.priceCurrency)) {
-    patch.priceCurrency = input.priceCurrency!;
-    changed.priceCurrency = { from: current.priceCurrency, to: input.priceCurrency };
-  }
-  if (diff(current.compareAtAmount, input.compareAtAmount)) {
-    patch.compareAtAmount = input.compareAtAmount ?? null;
-    changed.compareAtAmount = { from: current.compareAtAmount, to: input.compareAtAmount };
-  }
-  if (diff(current.availableForSale, input.availableForSale)) {
-    patch.availableForSale = input.availableForSale!;
-    changed.availableForSale = { from: current.availableForSale, to: input.availableForSale };
-  }
-  if (diff(current.selectedOptions, input.selectedOptions)) {
-    patch.selectedOptions = input.selectedOptions!;
-    changed.selectedOptions = { from: current.selectedOptions, to: input.selectedOptions };
-  }
-  if (diff(current.position, input.position)) {
-    patch.position = input.position!;
-    changed.position = { from: current.position, to: input.position };
-  }
-
-  if (Object.keys(changed).length === 0) {
-    return mapAdminVariant(current);
-  }
-
   return db.transaction(async (tx) => {
+    const [current] = await tx.select().from(productVariants).where(eq(productVariants.id, variantId)).limit(1);
+    if (!current) throw AppError.notFound("Variant not found");
+
+    await lockVariantManageableProduct(tx, current.productId);
+
+    if (input.priceAmount !== undefined) assertMoneyString("Price", input.priceAmount);
+    if (input.compareAtAmount != null) {
+      assertMoneyString("Compare-at price", input.compareAtAmount);
+      assertCompareAtAbovePrice(input.priceAmount ?? current.priceAmount, input.compareAtAmount);
+    }
+
+    if (input.sku && input.sku !== current.sku) {
+      const [dupe] = await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, input.sku)).limit(1);
+      if (dupe) throw new AppError(409, "SKU_TAKEN", `SKU "${input.sku}" is already in use.`);
+    }
+
+    const patch: Partial<typeof productVariants.$inferInsert> = { updatedAt: new Date() };
+    const changed: Record<string, { from: unknown; to: unknown }> = {};
+    const diff = (before: unknown, after: unknown): boolean =>
+      after !== undefined && JSON.stringify(before) !== JSON.stringify(after);
+
+    if (diff(current.title, input.title)) {
+      patch.title = input.title!;
+      changed.title = { from: current.title, to: input.title };
+    }
+    if (diff(current.sku, input.sku)) {
+      patch.sku = input.sku ?? null;
+      changed.sku = { from: current.sku, to: input.sku };
+    }
+    if (diff(current.priceAmount, input.priceAmount)) {
+      patch.priceAmount = input.priceAmount!;
+      changed.priceAmount = { from: current.priceAmount, to: input.priceAmount };
+    }
+    if (diff(current.priceCurrency, input.priceCurrency)) {
+      patch.priceCurrency = input.priceCurrency!;
+      changed.priceCurrency = { from: current.priceCurrency, to: input.priceCurrency };
+    }
+    if (diff(current.compareAtAmount, input.compareAtAmount)) {
+      patch.compareAtAmount = input.compareAtAmount ?? null;
+      changed.compareAtAmount = { from: current.compareAtAmount, to: input.compareAtAmount };
+    }
+    if (diff(current.availableForSale, input.availableForSale)) {
+      patch.availableForSale = input.availableForSale!;
+      changed.availableForSale = { from: current.availableForSale, to: input.availableForSale };
+    }
+    if (diff(current.selectedOptions, input.selectedOptions)) {
+      patch.selectedOptions = input.selectedOptions!;
+      changed.selectedOptions = { from: current.selectedOptions, to: input.selectedOptions };
+    }
+    if (diff(current.position, input.position)) {
+      patch.position = input.position!;
+      changed.position = { from: current.position, to: input.position };
+    }
+
+    if (Object.keys(changed).length === 0) {
+      return mapAdminVariant(current);
+    }
+
     const [row] = await tx.update(productVariants).set(patch).where(eq(productVariants.id, variantId)).returning();
     if (!row) throw new Error("Variant update returned no row");
 
@@ -202,34 +234,36 @@ const activeCartCondition = () => and(eq(carts.status, "active"), gt(carts.expir
 // active cart lines are NEVER touched — the 409 above already rejected
 // that path, and the FK remains as the hard backstop.
 export async function deleteVariant(admin: AdminContext, variantId: string) {
-  const [variant] = await db.select().from(productVariants).where(eq(productVariants.id, variantId)).limit(1);
-  if (!variant) throw AppError.notFound("Variant not found");
-
-  const [siblings] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(productVariants)
-    .where(eq(productVariants.productId, variant.productId));
-  if ((siblings?.count ?? 0) <= 1) {
-    throw AppError.conflict(
-      "LAST_VARIANT",
-      "A product must keep at least one variant. Add another variant before deleting this one.",
-    );
-  }
-
-  const [activeInCart] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(cartLines)
-    .innerJoin(carts, eq(cartLines.cartId, carts.id))
-    .where(and(eq(cartLines.variantId, variantId), activeCartCondition()));
-  if ((activeInCart?.count ?? 0) > 0) {
-    throw AppError.conflict(
-      "VARIANT_IN_CART",
-      "This variant is in an active shopping cart and cannot be deleted. Turn off “Available for sale” instead.",
-      { cartLineCount: activeInCart?.count ?? 0 },
-    );
-  }
-
   return db.transaction(async (tx) => {
+    const [variant] = await tx.select().from(productVariants).where(eq(productVariants.id, variantId)).limit(1);
+    if (!variant) throw AppError.notFound("Variant not found");
+
+    await lockVariantManageableProduct(tx, variant.productId);
+
+    const [siblings] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(productVariants)
+      .where(eq(productVariants.productId, variant.productId));
+    if ((siblings?.count ?? 0) <= 1) {
+      throw AppError.conflict(
+        "LAST_VARIANT",
+        "A product must keep at least one variant. Add another variant before deleting this one.",
+      );
+    }
+
+    const [activeInCart] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(cartLines)
+      .innerJoin(carts, eq(cartLines.cartId, carts.id))
+      .where(and(eq(cartLines.variantId, variantId), activeCartCondition()));
+    if ((activeInCart?.count ?? 0) > 0) {
+      throw AppError.conflict(
+        "VARIANT_IN_CART",
+        "This variant is in an active shopping cart and cannot be deleted. Turn off “Available for sale” instead.",
+        { cartLineCount: activeInCart?.count ?? 0 },
+      );
+    }
+
     await recordAudit(tx, {
       adminUserId: admin.userId,
       action: "variant.delete",

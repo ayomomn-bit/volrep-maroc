@@ -257,6 +257,32 @@ export function mapAdminProductDetail(
     content: {
       subtitle: row.subtitle,
     },
+    // "variante implicite" architecture (simple vs. variant products).
+    // `hasVariants: true` (every pre-existing product) is the unchanged
+    // shape — `commerce` is null and `variants` is the real source of
+    // truth, exactly as before. `hasVariants: false` surfaces the
+    // product's own commerce columns here; `variants` still contains
+    // exactly one row (the Default Variant) but Product Studio is not
+    // meant to edit it directly in that mode (see VariantsManager /
+    // SimpleProductCommerce on the admin side).
+    hasVariants: row.hasVariants,
+    commerce: row.hasVariants
+      ? null
+      : {
+          price: toMoney(row.priceAmount ?? "0", row.priceCurrency),
+          compareAtPrice: row.compareAtAmount ? toMoney(row.compareAtAmount, row.priceCurrency) : null,
+          availableForSale: row.availableForSale,
+          // Read from the Default Variant, NOT `products.stock`: stock is
+          // only ever written through adjustInventory (POST
+          // .../products/:id/inventory → adjustProductInventory →
+          // adjustInventory), which updates product_variants.stock alone
+          // — `products.stock` is a one-time snapshot (set at creation /
+          // mode-switch) that is never kept in sync afterwards. Reading
+          // the live variant value here is what cart/checkout/storefront
+          // already do, so this is also the correct "same number
+          // everywhere" source, not a second one.
+          stock: variants[0]?.stock ?? 0,
+        },
     images: images.map(mapAdminImage),
     options: options.map(mapAdminOption),
     variants: variants.map(mapAdminVariant),
@@ -332,8 +358,10 @@ export function computeStudioCompleteness(args: {
   landingPages: LandingPageRow[];
   productId: string;
   status: ProductRow["status"];
+  hasVariants: boolean;
+  priceAmount: string | null;
 }) {
-  const { images, variants, landingPages, productId, status } = args;
+  const { images, variants, landingPages, productId, status, hasVariants, priceAmount } = args;
   const ownedImages = images.filter((i) => i.storageKey !== null).length;
 
   return {
@@ -354,7 +382,13 @@ export function computeStudioCompleteness(args: {
     },
     commerce: {
       variants: variants.length,
-      priced: variants.length > 0 && variants.every((v) => Number(v.priceAmount) > 0),
+      // A simple product is priced straight off `products.price_amount`
+      // (its Default Variant always mirrors it, see
+      // services/admin/products.ts, so either read would agree — this one
+      // is the more direct statement of intent for that mode).
+      priced: hasVariants
+        ? variants.length > 0 && variants.every((v) => Number(v.priceAmount) > 0)
+        : Number(priceAmount ?? 0) > 0,
       published: status === "active",
     },
   };
@@ -384,6 +418,8 @@ export function mapProductStudio(args: {
       landingPages,
       productId: product.id,
       status: product.status,
+      hasVariants: product.hasVariants,
+      priceAmount: product.priceAmount,
     }),
   };
 }

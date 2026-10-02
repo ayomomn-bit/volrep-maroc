@@ -65,12 +65,38 @@ export const products = pgTable(
     heroCtaUrl: text("hero_cta_url").notNull().default(""),
     heroPrimaryImageId: uuid("hero_primary_image_id"),
     heroSecondaryImageId: uuid("hero_secondary_image_id"),
+    // ---- Simple product commerce ("variante implicite" architecture) ---
+    // `hasVariants = true` (the default, so every pre-existing product is
+    // unaffected) is today's model unchanged: price/stock/availability
+    // live exclusively on `product_variants`, these columns stay NULL and
+    // are never read.
+    // `hasVariants = false` ("simple product"): price/stock/availability
+    // are edited directly on the product, and the service layer
+    // transparently keeps exactly one `product_variants` row (the "Default
+    // Variant", identified by convention — see services/admin/variants.ts
+    // and services/admin/products.ts) in sync with these columns, so
+    // cart/checkout/storefront never need to know a simple product exists
+    // — they keep reading product_variants exactly as before.
+    hasVariants: boolean("has_variants").notNull().default(true),
+    priceAmount: numeric("price_amount", { precision: 10, scale: 2 }),
+    priceCurrency: text("price_currency").notNull().default("MAD"),
+    compareAtAmount: numeric("compare_at_amount", { precision: 10, scale: 2 }),
+    // Stock is never written by a product PATCH — only by the dedicated
+    // inventory endpoint (services/admin/inventory.ts's adjustInventory,
+    // reused as-is), same discipline as a variant's stock.
+    stock: integer("stock"),
+    availableForSale: boolean("available_for_sale").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     handleUnique: unique("products_handle_unique").on(table.handle),
     statusIdx: index("products_status_idx").on(table.status),
+    stockNonNegative: check("products_stock_check", sql`${table.stock} is null or ${table.stock} >= 0`),
+    compareAtAbovePrice: check(
+      "products_compare_at_check",
+      sql`${table.compareAtAmount} is null or ${table.priceAmount} is null or ${table.compareAtAmount} > ${table.priceAmount}`,
+    ),
   }),
 );
 

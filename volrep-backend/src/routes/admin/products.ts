@@ -8,11 +8,12 @@ import {
   listProducts,
   replaceImages,
   replaceOptions,
+  switchProductMode,
   updateProduct,
   type ProductStatus,
 } from "../../services/admin/products.js";
 import { createVariant, deleteVariant, updateVariant } from "../../services/admin/variants.js";
-import { adjustInventory, inventoryHistory } from "../../services/admin/inventory.js";
+import { adjustInventory, adjustProductInventory, inventoryHistory } from "../../services/admin/inventory.js";
 import {
   deleteProductMedia,
   reorderProductMedia,
@@ -39,6 +40,16 @@ const listQuerySchema = z
   })
   .strict();
 
+// Simple-product commerce fields, shared by create (where priceAmount is
+// required — enforced in the service, not here, since it only applies
+// when hasVariants is false) and update (all optional).
+const commerceFieldsSchema = {
+  priceAmount: z.string().regex(MONEY_RE, "Price must be a non-negative amount, max 2 decimals.").optional(),
+  priceCurrency: z.string().length(3).optional(),
+  compareAtAmount: z.string().regex(MONEY_RE).nullable().optional(),
+  availableForSale: z.boolean().optional(),
+};
+
 const createProductSchema = z
   .object({
     handle: z.string().min(1).max(200).regex(HANDLE_RE, "Handle must be lowercase, digits and single hyphens."),
@@ -47,8 +58,23 @@ const createProductSchema = z
     productType: z.string().max(120).optional(),
     tags: z.array(z.string().min(1).max(60)).max(50).optional(),
     status: z.enum(PRODUCT_STATUS).optional(),
+    // Required — every new product explicitly picks a mode; there is no
+    // ambiguous default (see services/admin/products.ts's createProduct).
+    hasVariants: z.boolean(),
+    ...commerceFieldsSchema,
   })
-  .strict();
+  .strict()
+  .refine((v) => v.hasVariants || v.priceAmount !== undefined, {
+    message: "priceAmount is required when hasVariants is false.",
+    path: ["priceAmount"],
+  })
+  .refine(
+    (v) => v.hasVariants ? [v.priceAmount, v.priceCurrency, v.compareAtAmount, v.availableForSale].every((x) => x === undefined) : true,
+    {
+      message: "priceAmount/priceCurrency/compareAtAmount/availableForSale are only accepted when hasVariants is false.",
+      path: ["hasVariants"],
+    },
+  );
 
 const updateProductSchema = z
   .object({
@@ -63,9 +89,15 @@ const updateProductSchema = z
     // were removed from Product Studio — that content lives in Lirya — so
     // they are no longer accepted here (the DB columns still exist).
     subtitle: z.string().max(300).optional(),
+    // Simple-product commerce. Whether these are actually allowed depends
+    // on this product's hasVariants, which Zod can't see — the service
+    // rejects them with 400 for a variant product (updateProduct).
+    ...commerceFieldsSchema,
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, "Provide at least one field to update.");
+
+const switchModeSchema = z.object({ mode: z.enum(["simple", "variants"]) }).strict();
 
 const mediaReorderSchema = z.object({ order: z.array(z.string().uuid()).min(1).max(20) }).strict();
 const mediaUpdateSchema = z.object({ altText: z.string().max(500).nullable() }).strict();
@@ -171,6 +203,28 @@ export async function adminProductRoutes(app: FastifyInstance): Promise<void> {
     return { product: await updateProduct(adminOf(request), id, body) };
   });
 
+  // Flip between "simple" and "with variants" — see
+  // services/admin/products.ts's switchProductMode for the exact rules
+  // (a zero-variant product gets a fresh Default Variant created on the
+  // fly; 409 MULTIPLE_VARIANTS / VARIANT_IN_CART for the other blocked
+  // cases). Same tier as every other content edit (requireAdmin) — not
+  // owner-gated, consistent with variant/option/image editing below.
+  app.patch("/api/admin/products/:id/mode", async (request) => {
+    const { id } = idParams.parse(request.params);
+    const body = switchModeSchema.parse(request.body);
+    return { product: await switchProductMode(adminOf(request), id, body.mode) };
+  });
+
+  // Stock for a simple product (hasVariants: false) — the product-level
+  // equivalent of POST /api/admin/variants/:variantId/inventory below,
+  // reusing the exact same adjustInventory() under the hood (service
+  // resolves the Default Variant and delegates, see inventory.ts).
+  app.post("/api/admin/products/:id/inventory", async (request) => {
+    const { id } = idParams.parse(request.params);
+    const body = inventorySchema.parse(request.body);
+    return { variant: await adjustProductInventory(adminOf(request), id, body) };
+  });
+
   app.put("/api/admin/products/:id/options", async (request) => {
     const { id } = idParams.parse(request.params);
     const body = optionsSchema.parse(request.body);
@@ -205,6 +259,12 @@ export async function adminProductRoutes(app: FastifyInstance): Promise<void> {
     return deleteVariant(adminOf(request), variantId);
   });
 
+  // Deliberately NOT guarded against a simple product's Default Variant
+  // (unlike create/update/delete above): adjusting its stock here is
+  // harmless — same row, same lock, same audit trail as going through
+  // POST /api/admin/products/:id/inventory — it just isn't the primary UI
+  // path for a simple product (Product Studio's simple-product view uses
+  // the product-level endpoint).
   app.post("/api/admin/variants/:variantId/inventory", async (request) => {
     const { variantId } = variantIdParams.parse(request.params);
     const body = inventorySchema.parse(request.body);

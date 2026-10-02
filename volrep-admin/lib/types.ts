@@ -139,11 +139,25 @@ export type ProductDetail = {
   productType: string;
   tags: string[];
   content: ProductContent;
+  // "variante implicite" architecture (simple vs. variant products) —
+  // mirrors mapAdminProductDetail in volrep-backend. `commerce` is only
+  // non-null when `hasVariants` is false; `variants` still holds exactly
+  // one row in that case (the Default Variant) but it is not meant to be
+  // edited directly — see SimpleProductCommerce vs. VariantsManager.
+  hasVariants: boolean;
+  commerce: SimpleProductCommerce | null;
   images: ProductImage[];
   options: ProductOption[];
   variants: Variant[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type SimpleProductCommerce = {
+  price: Money;
+  compareAtPrice: Money | null;
+  availableForSale: boolean;
+  stock: number;
 };
 
 // ---- Product Studio -------------------------------------------------
