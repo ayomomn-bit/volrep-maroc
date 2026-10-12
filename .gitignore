@@ -21,3 +21,10 @@ coverage/
 
 # Local/generated checkpoint files
 .checkpoint-*.html
+
+# Database dumps / backups (never commit production data)
+# Note: *.sql is intentionally NOT ignored — Drizzle migrations use it.
+*.dump
+*.pgdump
+*.sql.gz
+*.backup
